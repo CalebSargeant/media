@@ -1,0 +1,73 @@
+{{- $app := .Values.overseerr -}}
+{{- if $app.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: overseerr
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+spec:
+  ports:
+    - name: web
+      port: 5055
+      protocol: TCP
+      targetPort: 5055
+  selector:
+    app: overseerr
+{{ include "media.claim" (dict "root" . "name" $app.persistence.claimName "vol" $app.persistence "owner" $app) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: overseerr
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: overseerr
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      {{- include "media.podLabels" (dict "name" "overseerr" "app" $app) | nindent 6 }}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - env:
+            {{- include "media.tzEnv" (dict "root" . "app" $app) | nindent 12 }}
+            - name: LOG_LEVEL
+              value: {{ $app.logLevel | quote }}
+            - name: PORT
+              value: "5055"
+          image: {{ $app.image }}
+          name: overseerr
+          ports:
+            - containerPort: 5055
+          resources:
+            {{- toYaml $app.resources | nindent 12 }}
+          volumeMounts:
+            - mountPath: /app/config
+              name: overseerr-config
+      {{- include "media.placement" $app | nindent 6 }}
+      volumes:
+        - name: overseerr-config
+          persistentVolumeClaim:
+            claimName: {{ $app.persistence.claimName }}
+{{- if $app.httpsRedirect.enabled }}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ $app.httpsRedirect.name }}
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+spec:
+  redirectScheme:
+    permanent: true
+    scheme: https
+{{- end }}
+{{ include "media.ingresses" (dict "root" . "app" $app "service" "overseerr" "port" 5055) }}
+{{- end }}

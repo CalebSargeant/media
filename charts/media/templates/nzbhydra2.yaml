@@ -1,0 +1,59 @@
+{{- $app := .Values.nzbhydra2 -}}
+{{- if $app.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nzbhydra2
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "own" (dict "app" "nzbhydra2") "app" $app) | nindent 2 }}
+spec:
+  ports:
+    - name: http
+      port: 5076
+      targetPort: 5076
+  selector:
+    app: nzbhydra2
+  type: ClusterIP
+{{ include "media.claim" (dict "root" . "name" $app.persistence.claimName "vol" $app.persistence "owner" $app) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nzbhydra2
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "own" (dict "app" "nzbhydra2") "app" $app) | nindent 2 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nzbhydra2
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      {{- include "media.podLabels" (dict "name" "nzbhydra2" "app" $app) | nindent 6 }}
+    spec:
+      containers:
+        - env:
+            {{- include "media.lsioEnv" (dict "root" . "app" $app) | nindent 12 }}
+          image: {{ $app.image }}
+          {{- with $app.imagePullPolicy }}
+          imagePullPolicy: {{ . }}
+          {{- end }}
+          name: nzbhydra2
+          ports:
+            - containerPort: 5076
+              name: http
+          resources:
+            {{- toYaml $app.resources | nindent 12 }}
+          volumeMounts:
+            - mountPath: /config
+              name: config
+      {{- include "media.placement" $app | nindent 6 }}
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: {{ $app.persistence.claimName }}
+{{ include "media.ingresses" (dict "root" . "app" $app "service" "nzbhydra2" "port" 5076) }}
+{{- end }}

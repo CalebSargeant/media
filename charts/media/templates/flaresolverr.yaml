@@ -1,0 +1,78 @@
+{{- $app := .Values.flaresolverr -}}
+{{- if $app.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flaresolverr
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+spec:
+  ports:
+    - name: http
+      port: 8191
+      protocol: TCP
+      targetPort: 8191
+  selector:
+    app: flaresolverr
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flaresolverr
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+spec:
+  replicas: {{ $app.replicas }}
+  selector:
+    matchLabels:
+      app: flaresolverr
+  template:
+    metadata:
+      {{- include "media.podLabels" (dict "name" "flaresolverr" "app" $app) | nindent 6 }}
+    spec:
+      containers:
+        - env:
+            {{- include "media.lsioEnv" (dict "root" . "app" $app) | nindent 12 }}
+            - name: LOG_LEVEL
+              value: {{ $app.logLevel | quote }}
+            - name: LOG_HTML
+              value: {{ $app.logHtml | quote }}
+            - name: CAPTCHA_SOLVER
+              value: {{ $app.captchaSolver | quote }}
+          image: {{ $app.image }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8191
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          name: flaresolverr
+          ports:
+            - containerPort: 8191
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8191
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            {{- toYaml $app.resources | nindent 12 }}
+      {{- include "media.placement" $app | nindent 6 }}
+{{- with $app.pdb }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: flaresolverr
+  namespace: {{ $.Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+spec:
+  minAvailable: {{ .minAvailable }}
+  selector:
+    matchLabels:
+      app: flaresolverr
+{{- end }}
+{{ include "media.ingresses" (dict "root" . "app" $app "service" "flaresolverr" "port" 8191) }}
+{{- end }}

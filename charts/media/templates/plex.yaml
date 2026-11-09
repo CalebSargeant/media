@@ -1,0 +1,97 @@
+{{- $app := .Values.plex -}}
+{{- if $app.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plex
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+spec:
+  ports:
+    - name: plex-web
+      port: 32400
+      protocol: TCP
+      targetPort: 32400
+    - name: gdm-1
+      port: 32410
+      protocol: UDP
+      targetPort: 32410
+    - name: gdm-2
+      port: 32412
+      protocol: UDP
+      targetPort: 32412
+    - name: gdm-3
+      port: 32413
+      protocol: UDP
+      targetPort: 32413
+    - name: gdm-4
+      port: 32414
+      protocol: UDP
+      targetPort: 32414
+  selector:
+    app: plex
+{{ include "media.claim" (dict "root" . "name" $app.persistence.claimName "vol" $app.persistence "owner" $app) }}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: plex
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+spec:
+  selector:
+    matchLabels:
+      app: plex
+  template:
+    metadata:
+      {{- include "media.podLabels" (dict "name" "plex" "app" $app) | nindent 6 }}
+    spec:
+      containers:
+        - env:
+            {{- include "media.lsioEnv" (dict "root" . "app" $app) | nindent 12 }}
+            - name: VERSION
+              value: docker
+            {{- with $app.claimToken }}
+            - name: PLEX_CLAIM
+              value: {{ . | quote }}
+            {{- end }}
+          image: {{ $app.image }}
+          name: plex
+          ports:
+            - containerPort: 32400
+            - containerPort: 32410
+            - containerPort: 32412
+            - containerPort: 32413
+            - containerPort: 32414
+          resources:
+            {{- toYaml $app.resources | nindent 12 }}
+          volumeMounts:
+            - mountPath: /config
+              name: plex
+            - mountPath: /movies
+              name: movies
+            - mountPath: /series
+              name: series
+            - mountPath: /music
+              name: music
+      {{- if $app.hostNetwork }}
+      dnsPolicy: ClusterFirstWithHostNet
+      hostNetwork: true
+      {{- end }}
+      {{- include "media.placement" $app | nindent 6 }}
+      volumes:
+        - name: plex
+          persistentVolumeClaim:
+            claimName: {{ $app.persistence.claimName }}
+        - name: movies
+          persistentVolumeClaim:
+            claimName: movies
+        - name: series
+          persistentVolumeClaim:
+            claimName: series
+        - name: music
+          persistentVolumeClaim:
+            claimName: music
+{{ include "media.ingresses" (dict "root" . "app" $app "service" "plex" "port" 32400) }}
+{{- end }}

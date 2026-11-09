@@ -1,0 +1,3 @@
+{{- if .Values.prowlarr.enabled }}
+{{ include "media.arr" (dict "root" . "name" "prowlarr" "app" .Values.prowlarr "port" 9696 "library" (list)) }}
+{{- end }}

@@ -1,0 +1,59 @@
+{{- $app := .Values.sabnzbd -}}
+{{- if $app.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sabnzbd
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+spec:
+  ports:
+    - name: web
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+  selector:
+    app: sabnzbd
+{{ include "media.claim" (dict "root" . "name" $app.persistence.claimName "vol" $app.persistence "owner" $app) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sabnzbd
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sabnzbd
+  template:
+    metadata:
+      {{- include "media.podLabels" (dict "name" "sabnzbd" "app" $app) | nindent 6 }}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - env:
+            {{- include "media.lsioEnv" (dict "root" . "app" $app) | nindent 12 }}
+          image: {{ $app.image }}
+          name: sabnzbd
+          ports:
+            - containerPort: 8080
+          resources:
+            {{- toYaml $app.resources | nindent 12 }}
+          volumeMounts:
+            - mountPath: /config
+              name: sabnzbd-config
+            - mountPath: /downloads
+              name: downloads
+      {{- include "media.placement" $app | nindent 6 }}
+      volumes:
+        - name: sabnzbd-config
+          persistentVolumeClaim:
+            claimName: {{ $app.persistence.claimName }}
+        - name: downloads
+          persistentVolumeClaim:
+            claimName: downloads
+{{ include "media.ingresses" (dict "root" . "app" $app "service" "sabnzbd" "port" 8080) }}
+{{- end }}

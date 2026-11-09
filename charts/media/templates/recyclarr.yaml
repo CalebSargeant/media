@@ -1,0 +1,60 @@
+{{- $app := .Values.recyclarr -}}
+{{- if $app.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: recyclarr-config
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+data:
+  {{- toYaml (dict "recyclarr.yml" (required "recyclarr.config is required" $app.config)) | nindent 2 }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: recyclarr
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+spec:
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 600
+      backoffLimit: 1
+      template:
+        spec:
+          automountServiceAccountToken: false
+          containers:
+            - args:
+                - sync
+              env:
+                {{- range list "SONARR_API_KEY" "RADARR_API_KEY" }}
+                - name: {{ . }}
+                  valueFrom:
+                    secretKeyRef:
+                      key: {{ . }}
+                      name: {{ required "recyclarr.existingSecret is required" $app.existingSecret }}
+                {{- end }}
+              image: {{ $app.image }}
+              name: recyclarr
+              resources:
+                {{- toYaml $app.resources | nindent 16 }}
+              volumeMounts:
+                - mountPath: /config
+                  name: data
+                - mountPath: /config/recyclarr.yml
+                  name: config
+                  subPath: recyclarr.yml
+          {{- include "media.placement" $app | nindent 10 }}
+          restartPolicy: Never
+          volumes:
+            - emptyDir: {}
+              name: data
+            - configMap:
+                name: recyclarr-config
+              name: config
+  schedule: {{ $app.schedule | quote }}
+  successfulJobsHistoryLimit: 3
+{{- end }}

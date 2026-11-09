@@ -1,0 +1,87 @@
+{{- $app := .Values.lidarr -}}
+{{- if $app.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lidarr
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+spec:
+  ports:
+    - port: 8686
+      protocol: TCP
+      targetPort: 8686
+  selector:
+    app: lidarr
+  type: ClusterIP
+{{ include "media.claim" (dict "root" . "name" $app.persistence.claimName "vol" $app.persistence "owner" $app) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lidarr
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lidarr
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      {{- include "media.podLabels" (dict "name" "lidarr" "app" $app) | nindent 6 }}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - env:
+            {{- include "media.lsioEnv" (dict "root" . "app" $app) | nindent 12 }}
+          image: {{ $app.image }}
+          {{- with $app.imagePullPolicy }}
+          imagePullPolicy: {{ . }}
+          {{- end }}
+          livenessProbe:
+            failureThreshold: 10
+            httpGet:
+              path: /ping
+              port: 8686
+            periodSeconds: 30
+            timeoutSeconds: 10
+          name: lidarr
+          ports:
+            - containerPort: 8686
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8686
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            {{- toYaml $app.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - mountPath: /config
+              name: lidarr-data
+            - mountPath: /music
+              name: music
+            - mountPath: /downloads
+              name: downloads
+      {{- include "media.placement" $app | nindent 6 }}
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: lidarr-data
+          persistentVolumeClaim:
+            claimName: {{ $app.persistence.claimName }}
+        - name: music
+          persistentVolumeClaim:
+            claimName: music
+        - name: downloads
+          persistentVolumeClaim:
+            claimName: downloads
+{{ include "media.ingresses" (dict "root" . "app" $app "service" "lidarr" "port" 8686) }}
+{{- end }}

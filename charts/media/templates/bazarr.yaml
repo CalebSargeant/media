@@ -1,0 +1,68 @@
+{{- $app := .Values.bazarr -}}
+{{- if $app.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bazarr
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+spec:
+  ports:
+    - port: 6767
+      protocol: TCP
+      targetPort: 6767
+  selector:
+    app: bazarr
+  type: ClusterIP
+{{ include "media.claim" (dict "root" . "name" $app.persistence.claimName "vol" $app.persistence "owner" $app) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bazarr
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bazarr
+  template:
+    metadata:
+      {{- include "media.podLabels" (dict "name" "bazarr" "app" $app) | nindent 6 }}
+    spec:
+      containers:
+        - env:
+            {{- include "media.lsioEnv" (dict "root" . "app" $app) | nindent 12 }}
+          image: {{ $app.image }}
+          name: bazarr
+          ports:
+            - containerPort: 6767
+          resources:
+            {{- toYaml $app.resources | nindent 12 }}
+          volumeMounts:
+            - mountPath: /config
+              name: bazarr
+            - mountPath: /movies
+              name: movies
+            - mountPath: /downloads
+              name: downloads
+            - mountPath: /series
+              name: series
+      {{- include "media.placement" $app | nindent 6 }}
+      volumes:
+        - name: bazarr
+          persistentVolumeClaim:
+            claimName: {{ $app.persistence.claimName }}
+        - name: movies
+          persistentVolumeClaim:
+            claimName: movies
+        - name: downloads
+          persistentVolumeClaim:
+            claimName: downloads
+        - name: series
+          persistentVolumeClaim:
+            claimName: series
+{{ include "media.ingresses" (dict "root" . "app" $app "service" "bazarr" "port" 6767) }}
+{{- end }}

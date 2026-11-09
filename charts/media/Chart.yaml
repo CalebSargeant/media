@@ -1,0 +1,24 @@
+apiVersion: v2
+name: media
+description: Self-hosted media stack - Plex, Overseerr, the *arr apps, download clients, Recyclarr and a streaming-catalogue sync
+type: application
+
+# The release workflow packages the chart with the release tag as its version,
+# so this value only matters for local `helm package` runs.
+version: 1.0.0
+
+home: https://github.com/CalebSargeant/media
+sources:
+  - https://github.com/CalebSargeant/media
+
+keywords:
+  - plex
+  - sonarr
+  - radarr
+  - prowlarr
+  - qbittorrent
+  - sabnzbd
+
+maintainers:
+  - name: Caleb Sargeant
+    url: https://github.com/CalebSargeant

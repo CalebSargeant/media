@@ -1,0 +1,5 @@
+{{- if .Values.library.enabled }}
+{{- range $name, $vol := .Values.library.volumes }}
+{{ include "media.claim" (dict "root" $ "name" $name "vol" $vol "owner" $.Values.library) }}
+{{- end }}
+{{- end }}

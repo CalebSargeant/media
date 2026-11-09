@@ -1,0 +1,111 @@
+# Every app on, with placeholder environment values, so CI renders every template.
+timezone: Europe/London
+
+library:
+  enabled: true
+  volumes:
+    movies:
+      source:
+        hostPath:
+          path: /srv/media/movies
+    series:
+      source:
+        hostPath:
+          path: /srv/media/series
+    music:
+      source:
+        nfs:
+          server: nas.example.com
+          path: /export/music
+    downloads:
+      source:
+        nfs:
+          server: nas.example.com
+          path: /export/downloads
+
+bazarr:
+  enabled: true
+  ingresses:
+    - name: bazarr
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt
+      rules:
+        - host: bazarr.example.com
+      tls:
+        - hosts:
+            - bazarr.example.com
+          secretName: bazarr-tls
+
+flaresolverr:
+  enabled: true
+
+lidarr:
+  enabled: true
+
+nzbhydra2:
+  enabled: true
+
+overseerr:
+  enabled: true
+  httpsRedirect:
+    enabled: true
+
+plex:
+  enabled: true
+  persistence:
+    source:
+      hostPath:
+        path: /srv/plex
+
+prowlarr:
+  enabled: true
+  postgres:
+    existingSecret: prowlarr-db
+  seedConfigMap: prowlarr-config
+  exportarr:
+    enabled: true
+  podMonitor:
+    enabled: true
+
+qbittorrent:
+  enabled: true
+  service:
+    torrentingNodePort: 30555
+
+radarr:
+  enabled: true
+  postgres:
+    existingSecret: radarr-db
+  seedConfigMap: radarr-config
+  exportarr:
+    enabled: true
+  podMonitor:
+    enabled: true
+  ingresses:
+    - name: radarr
+      ingressClassName: traefik
+      rules:
+        - host: radarr.example.com
+
+recyclarr:
+  enabled: true
+  existingSecret: recyclarr
+  nodeSelector:
+    kubernetes.io/arch: arm64
+  config: |
+    sonarr:
+      main:
+        base_url: http://sonarr:8989
+        api_key: !env_var SONARR_API_KEY
+
+sabnzbd:
+  enabled: true
+
+sonarr:
+  enabled: true
+
+streamingSync:
+  enabled: true
+  existingSecret: streaming-sync
+  region: GB
+  providers: Netflix

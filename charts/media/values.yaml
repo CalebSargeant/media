@@ -1,0 +1,357 @@
+# Every app is off until `enabled: true`. Besides its own keys, each accepts
+# whichever of these apply to it:
+#   image          full image reference
+#   labels         added to every object the app renders
+#   podLabels      added to the pod template, beside `app: <name>`
+#   nodeSelector   \
+#   affinity        > pod placement
+#   tolerations    /
+#   timezone       overrides the top-level timezone
+#   resources      main container resources
+#   ingresses      Ingress objects, each:
+#                    name: radarr                  # object name
+#                    annotations: {}
+#                    labels: {}
+#                    rules:
+#                      - host: radarr.example.com  # backend defaults to the app's Service
+#                        service: other            # optional backend overrides
+#                        port: 8080
+#                    tls:
+#                      - hosts: [radarr.example.com]
+#                        secretName: radarr-tls
+#
+# A `persistence` block renders a PVC named `claimName`, plus a static PV of the
+# same name when `source` holds a volume source (hostPath, nfs, ...). Every PV and
+# PVC carries helm.sh/resource-policy: keep, so an uninstall never deletes data.
+
+puid: "1000"
+pgid: "1000"
+timezone: Etc/UTC
+
+# Volumes several apps mount: movies, series, music and downloads. The apps
+# expect these claims to exist, so enable this unless they come from elsewhere.
+library:
+  enabled: false
+  labels: {}
+  volumes:
+    movies:
+      size: 1Ti
+      accessMode: ReadWriteOnce
+      storageClass: ""
+      source: {}
+    series:
+      size: 1Ti
+      accessMode: ReadWriteOnce
+      storageClass: ""
+      source: {}
+    music:
+      size: 500Gi
+      accessMode: ReadWriteOnce
+      storageClass: ""
+      source: {}
+    downloads:
+      size: 500Gi
+      accessMode: ReadWriteOnce
+      storageClass: ""
+      source: {}
+
+# Metrics sidecar for radarr, sonarr and prowlarr. Needs the app's seedConfigMap,
+# which is where it reads the API key from.
+exportarr:
+  image: ghcr.io/onedr0p/exportarr:v2.3.0@sha256:af535d94061cf97a52e1661945ffba78c03f9443eae7c0da1a80a5a4be56b520
+  resources:
+    requests:
+      cpu: 5m
+      memory: 24Mi
+    limits:
+      memory: 96Mi
+
+# Init container that copies config.xml from an app's seedConfigMap into its
+# config volume on every start.
+seedConfig:
+  image: busybox:1.37.0
+  resources:
+    requests:
+      cpu: 5m
+      memory: 8Mi
+    limits:
+      memory: 32Mi
+
+bazarr:
+  enabled: false
+  image: linuxserver/bazarr:1.6.2
+  resources:
+    requests:
+      cpu: 10m
+      memory: 238Mi
+    limits:
+      memory: 512Mi
+  persistence:
+    claimName: bazarr
+    size: 5Gi
+    accessMode: ReadWriteOnce
+    storageClass: ""
+    source: {}
+  ingresses: []
+
+flaresolverr:
+  enabled: false
+  image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
+  replicas: 2
+  logLevel: info
+  logHtml: "false"
+  captchaSolver: none
+  pdb:
+    minAvailable: 1
+  resources:
+    requests:
+      cpu: 10m
+      memory: 384Mi
+    limits:
+      memory: 1Gi
+  ingresses: []
+
+lidarr:
+  enabled: false
+  image: linuxserver/lidarr:3.1.6
+  imagePullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 10m
+      memory: 320Mi
+    limits:
+      memory: 1Gi
+  persistence:
+    claimName: lidarr-data
+    size: 5Gi
+    accessMode: ReadWriteOnce
+    storageClass: ""
+    source: {}
+  ingresses: []
+
+nzbhydra2:
+  enabled: false
+  image: linuxserver/nzbhydra2:8.9.0
+  imagePullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 10m
+      memory: 710Mi
+    limits:
+      memory: 1536Mi
+  persistence:
+    claimName: nzbhydra2-config
+    size: 5Gi
+    accessMode: ReadWriteOnce
+    storageClass: ""
+    source: {}
+  ingresses: []
+
+overseerr:
+  enabled: false
+  image: sctx/overseerr:1.35.0
+  logLevel: info
+  resources:
+    requests:
+      cpu: 10m
+      ephemeral-storage: 1Gi
+      memory: 288Mi
+    limits:
+      ephemeral-storage: 2Gi
+      memory: 512Mi
+  persistence:
+    claimName: overseerr-data
+    size: 2Gi
+    accessMode: ReadWriteOnce
+    storageClass: ""
+    source: {}
+  # Traefik Middleware that redirects to https, for an http-only Ingress to use.
+  httpsRedirect:
+    enabled: false
+    name: https-redirect
+  ingresses: []
+
+plex:
+  enabled: false
+  image: lscr.io/linuxserver/plex:1.43.5
+  # One-time token from https://plex.tv/claim; only read on first start.
+  claimToken: ""
+  hostNetwork: true
+  resources:
+    requests:
+      cpu: 20m
+      memory: 448Mi
+    limits:
+      memory: 3Gi
+  persistence:
+    claimName: plex
+    size: 50Gi
+    accessMode: ReadWriteOnce
+    storageClass: ""
+    source: {}
+  ingresses: []
+
+prowlarr:
+  enabled: false
+  image: linuxserver/prowlarr:2.7.0
+  imagePullPolicy: IfNotPresent
+  strategy:
+    type: Recreate
+  # Secret with the Postgres password, exposed as PROWLARR__POSTGRES__PASSWORD.
+  postgres:
+    existingSecret: ""
+    passwordKey: password
+  # ConfigMap holding a config.xml to seed /config with. Empty: the app writes its own.
+  seedConfigMap: ""
+  exportarr:
+    enabled: false
+  podMonitor:
+    enabled: false
+  resources:
+    requests:
+      cpu: 11m
+      memory: 100Mi
+    limits:
+      memory: 512Mi
+  persistence:
+    claimName: prowlarr-data
+    size: 5Gi
+    accessMode: ReadWriteOnce
+    storageClass: ""
+    source: {}
+  ingresses: []
+
+qbittorrent:
+  enabled: false
+  image: linuxserver/qbittorrent:5.3.0
+  webuiPort: 8080
+  torrentingPort: 55555
+  service:
+    type: NodePort
+    # Fixed node port for the torrent listener; empty lets Kubernetes pick one.
+    torrentingNodePort: null
+  resources:
+    requests:
+      cpu: 10m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  persistence:
+    claimName: qbittorrent
+    size: 5Gi
+    accessMode: ReadWriteOnce
+    storageClass: ""
+    source: {}
+  ingresses: []
+
+radarr:
+  enabled: false
+  image: linuxserver/radarr:6.4.4
+  postgres:
+    existingSecret: ""
+    passwordKey: password
+  seedConfigMap: ""
+  exportarr:
+    enabled: false
+  podMonitor:
+    enabled: false
+  resources:
+    requests:
+      cpu: 200m
+      memory: 384Mi
+    limits:
+      cpu: 750m
+      memory: 512Mi
+  persistence:
+    claimName: radarr
+    size: 5Gi
+    accessMode: ReadWriteOnce
+    storageClass: ""
+    source: {}
+  ingresses: []
+
+recyclarr:
+  enabled: false
+  image: ghcr.io/recyclarr/recyclarr:8.8.1
+  schedule: "0 4 * * *"
+  # recyclarr.yml. API keys are read with `!env_var SONARR_API_KEY` / `!env_var RADARR_API_KEY`.
+  config: ""
+  # Secret with SONARR_API_KEY and RADARR_API_KEY.
+  existingSecret: ""
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+sabnzbd:
+  enabled: false
+  image: linuxserver/sabnzbd:4.5.5
+  resources:
+    requests:
+      cpu: 200m
+      ephemeral-storage: 1Gi
+      memory: 256Mi
+    limits:
+      cpu: 750m
+      ephemeral-storage: 4Gi
+      memory: 512Mi
+  persistence:
+    claimName: sabnzbd-config
+    size: 1Gi
+    accessMode: ReadWriteOnce
+    storageClass: ""
+    source: {}
+  ingresses: []
+
+sonarr:
+  enabled: false
+  image: linuxserver/sonarr:4.0.20
+  postgres:
+    existingSecret: ""
+    passwordKey: password
+  seedConfigMap: ""
+  exportarr:
+    enabled: false
+  podMonitor:
+    enabled: false
+  resources:
+    requests:
+      cpu: 10m
+      memory: 320Mi
+    limits:
+      memory: 512Mi
+  persistence:
+    claimName: sonarr
+    size: 5Gi
+    accessMode: ReadWriteOnce
+    storageClass: ""
+    source: {}
+  ingresses: []
+
+# Unmonitors and deletes titles that are on a subscribed streaming service, and
+# re-adds them once they leave it. See files/sync.py.
+streamingSync:
+  enabled: false
+  image: python:3.12.16-slim
+  schedule: "0 5 * * *"
+  # Secret with TMDB_API_KEY, RADARR_API_KEY, SONARR_API_KEY and, optionally, SLACK_BOT_TOKEN.
+  existingSecret: ""
+  # Each setting below is a string and becomes an env var when non-empty; empty
+  # ones use the script's default.
+  dryRun: "true"
+  region: ""
+  providers: ""
+  keepTag: ""
+  maxRemove: ""
+  slackChannel: ""
+  # Defaults to the radarr and sonarr Services in the `media` namespace.
+  radarrUrl: ""
+  sonarrUrl: ""
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 256Mi

@@ -1,0 +1,69 @@
+{{- $app := .Values.streamingSync -}}
+{{- if $app.enabled }}
+{{- $secret := required "streamingSync.existingSecret is required" $app.existingSecret }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: streaming-sync-script
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+data:
+  {{- toYaml (dict "sync.py" (.Files.Get "files/sync.py")) | nindent 2 }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: streaming-sync
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+spec:
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 1800
+      backoffLimit: 1
+      template:
+        spec:
+          automountServiceAccountToken: false
+          containers:
+            - command:
+                - python
+                - /app/sync.py
+              env:
+                {{- range list (list "DRY_RUN" $app.dryRun) (list "REGION" $app.region) (list "PROVIDERS" $app.providers) (list "KEEP_TAG" $app.keepTag) (list "MAX_REMOVE" $app.maxRemove) (list "SLACK_CHANNEL" $app.slackChannel) (list "RADARR_URL" $app.radarrUrl) (list "SONARR_URL" $app.sonarrUrl) }}
+                {{- if index . 1 }}
+                - name: {{ index . 0 }}
+                  value: {{ index . 1 | quote }}
+                {{- end }}
+                {{- end }}
+                {{- range list "TMDB_API_KEY" "RADARR_API_KEY" "SONARR_API_KEY" }}
+                - name: {{ . }}
+                  valueFrom:
+                    secretKeyRef:
+                      key: {{ . }}
+                      name: {{ $secret }}
+                {{- end }}
+                - name: SLACK_BOT_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      key: SLACK_BOT_TOKEN
+                      name: {{ $secret }}
+                      optional: true
+              image: {{ $app.image }}
+              name: streaming-sync
+              resources:
+                {{- toYaml $app.resources | nindent 16 }}
+              volumeMounts:
+                - mountPath: /app
+                  name: script
+          {{- include "media.placement" $app | nindent 10 }}
+          restartPolicy: Never
+          volumes:
+            - configMap:
+                name: streaming-sync-script
+              name: script
+  schedule: {{ $app.schedule | quote }}
+  successfulJobsHistoryLimit: 3
+{{- end }}

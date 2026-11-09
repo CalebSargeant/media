@@ -1,0 +1,75 @@
+{{- $app := .Values.qbittorrent -}}
+{{- if $app.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qbittorrent
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+spec:
+  ports:
+    - name: web-ui
+      port: {{ $app.webuiPort }}
+      protocol: TCP
+      targetPort: {{ $app.webuiPort }}
+    {{- range list "TCP" "UDP" }}
+    - name: bittorrent-{{ lower . }}
+      {{- with $app.service.torrentingNodePort }}
+      nodePort: {{ . }}
+      {{- end }}
+      port: {{ $app.torrentingPort }}
+      protocol: {{ . }}
+      targetPort: {{ $app.torrentingPort }}
+    {{- end }}
+  selector:
+    app: qbittorrent
+  type: {{ $app.service.type }}
+{{ include "media.claim" (dict "root" . "name" $app.persistence.claimName "vol" $app.persistence "owner" $app) }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: qbittorrent
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qbittorrent
+  serviceName: qbittorrent
+  template:
+    metadata:
+      {{- include "media.podLabels" (dict "name" "qbittorrent" "app" $app) | nindent 6 }}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - env:
+            {{- include "media.lsioEnv" (dict "root" . "app" $app) | nindent 12 }}
+            - name: WEBUI_PORT
+              value: {{ $app.webuiPort | quote }}
+            - name: TORRENTING_PORT
+              value: {{ $app.torrentingPort | quote }}
+          image: {{ $app.image }}
+          name: qbittorrent
+          ports:
+            - containerPort: {{ $app.webuiPort }}
+            - containerPort: {{ $app.torrentingPort }}
+          resources:
+            {{- toYaml $app.resources | nindent 12 }}
+          volumeMounts:
+            - mountPath: /config
+              name: config
+            - mountPath: /downloads
+              name: downloads
+      {{- include "media.placement" $app | nindent 6 }}
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: {{ $app.persistence.claimName }}
+        - name: downloads
+          persistentVolumeClaim:
+            claimName: downloads
+{{ include "media.ingresses" (dict "root" . "app" $app "service" "qbittorrent" "port" $app.webuiPort) }}
+{{- end }}

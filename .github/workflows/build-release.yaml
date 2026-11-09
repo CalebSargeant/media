@@ -1,0 +1,46 @@
+name: Semantic Release
+
+# Cuts a version and GitHub release from the conventional commits on main. The
+# release event then runs chart-release.yaml, which publishes the chart at that
+# version. Needs the SEMANTIC_RELEASE_APP_ID and SEMANTIC_RELEASE_APP_PRIVATE_KEY
+# secrets: a release created with GITHUB_TOKEN would not trigger chart-release.
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - 'LICENSE'
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump type'
+        required: false
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+concurrency:
+  group: build-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  semantic-release:
+    name: Semantic Release
+    uses: calebsargeant/reusable-workflows/.github/workflows/semantic-release.yaml@98676cf3b495f978b1f9dbe22719d7cbd293b5b1 # v1.15.0
+    with:
+      bump: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.bump || '' }}
+      working_directory: '.'
+    secrets:
+      SEMANTIC_RELEASE_APP_ID: ${{ secrets.SEMANTIC_RELEASE_APP_ID }}
+      SEMANTIC_RELEASE_APP_PRIVATE_KEY: ${{ secrets.SEMANTIC_RELEASE_APP_PRIVATE_KEY }}

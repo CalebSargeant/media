@@ -1,0 +1,45 @@
+name: Test
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  chart:
+    name: helm lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+
+      - name: Lint with defaults (every app off)
+        run: helm lint charts/media
+
+      - name: Lint and render with every app on
+        run: |
+          set -euo pipefail
+          helm lint charts/media --values charts/media/ci/test-values.yaml
+          helm template media charts/media --namespace media --values charts/media/ci/test-values.yaml > /dev/null
+
+  secrets:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

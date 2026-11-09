@@ -1,0 +1,3 @@
+{{- if .Values.radarr.enabled }}
+{{ include "media.arr" (dict "root" . "name" "radarr" "app" .Values.radarr "port" 7878 "library" (list "movies" "downloads")) }}
+{{- end }}
