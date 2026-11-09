@@ -103,6 +103,7 @@ flaresolverr:
   captchaSolver: none
   pdb:
     minAvailable: 1
+  # 1Gi limit: each solve starts a Chromium that spikes past 512Mi.
   resources:
     requests:
       cpu: 10m
@@ -133,6 +134,7 @@ nzbhydra2:
   enabled: false
   image: linuxserver/nzbhydra2:8.9.0
   imagePullPolicy: IfNotPresent
+  # A JVM sizes its heap from the cgroup limit, so keep the limit well above the working set.
   resources:
     requests:
       cpu: 10m
@@ -177,6 +179,7 @@ plex:
   # One-time token from https://plex.tv/claim; only read on first start.
   claimToken: ""
   hostNetwork: true
+  # 3Gi limit: preview-thumbnail generation transcodes 4K files and was OOMKilled at 1Gi.
   resources:
     requests:
       cpu: 20m
@@ -195,6 +198,7 @@ prowlarr:
   enabled: false
   image: linuxserver/prowlarr:2.7.0
   imagePullPolicy: IfNotPresent
+  # /config is ReadWriteOnce: a rolling update's new pod cannot attach it while the old one holds it.
   strategy:
     type: Recreate
   # Secret with the Postgres password, exposed as PROWLARR__POSTGRES__PASSWORD.
@@ -202,6 +206,7 @@ prowlarr:
     existingSecret: ""
     passwordKey: password
   # ConfigMap holding a config.xml to seed /config with. Empty: the app writes its own.
+  # Copied, not mounted, because the app writes new keys to config.xml at startup.
   seedConfigMap: ""
   exportarr:
     enabled: false
@@ -288,6 +293,7 @@ recyclarr:
 sabnzbd:
   enabled: false
   image: linuxserver/sabnzbd:4.5.5
+  # The article cache (cache_limit in sabnzbd.ini) counts against the memory limit; keep it well below.
   resources:
     requests:
       cpu: 200m
@@ -331,7 +337,8 @@ sonarr:
   ingresses: []
 
 # Unmonitors and deletes titles that are on a subscribed streaming service, and
-# re-adds them once they leave it. See files/sync.py.
+# re-adds them once they leave it. Titles tagged with keepTag are never touched.
+# See files/sync.py.
 streamingSync:
   enabled: false
   image: python:3.12.16-slim

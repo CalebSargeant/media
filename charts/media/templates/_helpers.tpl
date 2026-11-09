@@ -174,7 +174,8 @@ writes the API key out for exportarr. Args: volume (the config volume name), nam
 {{- end -}}
 
 {{/*
-exportarr sidecar. Args: root, name, port.
+exportarr sidecar. Args: root, name, port. TCP probes only, so a fault in the
+exporter never marks the app NotReady.
 */}}
 {{- define "media.exportarr" -}}
 - args:
@@ -242,6 +243,8 @@ spec:
 {{/*
 radarr, sonarr and prowlarr: Service, config claim, Deployment, PodMonitor and
 Ingresses. Args: root, name, app, port, library (library volumes mounted at /<name>).
+Liveness restarts a wedged app, which readiness never does; the startup probe
+gives a database migration on upgrade 10 minutes first.
 */}}
 {{- define "media.arr" -}}
 {{- $ := .root -}}
