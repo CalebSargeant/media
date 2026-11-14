@@ -37,6 +37,7 @@ The chart creates no Secrets. Point it at ones you manage:
 |---|---|---|
 | radarr, sonarr, prowlarr | `postgres.existingSecret` | `password` (or `postgres.passwordKey`) |
 | spotweb | `database.existingSecret` | `password` (or `database.passwordKey`) |
+| spotweb bridge | `bridge.radarr.existingSecret` | `RADARR_API_KEY` (or `bridge.radarr.apiKeyKey`) |
 | recyclarr | `existingSecret` | `SONARR_API_KEY`, `RADARR_API_KEY` |
 | streamingSync | `existingSecret` | `TMDB_API_KEY`, `RADARR_API_KEY`, `SONARR_API_KEY`, optional `SLACK_BOT_TOKEN` |
 

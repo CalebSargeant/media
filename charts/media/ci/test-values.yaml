@@ -100,6 +100,8 @@ recyclarr:
 
 sabnzbd:
   enabled: true
+  scripts:
+    enabled: true
 
 sonarr:
   enabled: true
@@ -109,6 +111,11 @@ spotweb:
   database:
     host: postgres.example.svc.cluster.local
     existingSecret: spotweb-db
+  bridge:
+    enabled: true
+    radarr:
+      url: http://radarr.media.svc.cluster.local:7878
+      existingSecret: radarr-api
 
 streamingSync:
   enabled: true
