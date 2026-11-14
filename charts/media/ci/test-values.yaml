@@ -104,6 +104,12 @@ sabnzbd:
 sonarr:
   enabled: true
 
+spotweb:
+  enabled: true
+  database:
+    host: postgres.example.svc.cluster.local
+    existingSecret: spotweb-db
+
 streamingSync:
   enabled: true
   existingSecret: streaming-sync
