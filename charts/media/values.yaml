@@ -303,6 +303,10 @@ sabnzbd:
       cpu: 750m
       ephemeral-storage: 4Gi
       memory: 512Mi
+  # Mounts post-processing scripts (files/) at /scripts. Set SABnzbd's script folder to
+  # /scripts and give the movie category dvd-flatten.py, which joins a DVD rip into one VOB.
+  scripts:
+    enabled: false
   persistence:
     claimName: sabnzbd-config
     size: 1Gi
@@ -361,6 +365,24 @@ spotweb:
   cron:
     retrieve: "*/15 * * * *"
     cacheCheck: ""
+  # Newznab proxy for Radarr (files/spotweb-bridge.py) on the Service's `bridge` port.
+  # Point Radarr's Spotweb indexer at http://spotweb.<namespace>:<port>/radarr. It renames
+  # Spotnet results that match the searched movie, or on RSS a missing movie from the
+  # Radarr API, to "Title Year quality" so Radarr can parse them.
+  bridge:
+    enabled: false
+    image: python:3.12.16-slim
+    port: 8080
+    radarr:
+      url: ""
+      existingSecret: ""
+      apiKeyKey: RADARR_API_KEY
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        memory: 128Mi
   ingresses: []
 
 # Unmonitors and deletes titles that are on a subscribed streaming service, and

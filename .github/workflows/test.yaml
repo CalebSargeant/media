@@ -23,6 +23,11 @@ jobs:
 
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
 
+      - name: Self-test the bundled scripts
+        run: |
+          python3 charts/media/files/spotweb-bridge.py --self-test
+          python3 charts/media/files/dvd-flatten.py --self-test
+
       - name: Lint with defaults (every app off)
         run: helm lint charts/media
 

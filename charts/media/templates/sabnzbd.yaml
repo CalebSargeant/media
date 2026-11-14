@@ -1,5 +1,16 @@
 {{- $app := .Values.sabnzbd -}}
 {{- if $app.enabled }}
+{{- if $app.scripts.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sabnzbd-scripts
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+data:
+  {{- toYaml (dict "dvd-flatten.py" (.Files.Get "files/dvd-flatten.py")) | nindent 2 }}
+{{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -47,6 +58,11 @@ spec:
               name: sabnzbd-config
             - mountPath: /downloads
               name: downloads
+            {{- if $app.scripts.enabled }}
+            - mountPath: /scripts
+              name: scripts
+              readOnly: true
+            {{- end }}
       {{- include "media.placement" $app | nindent 6 }}
       volumes:
         - name: sabnzbd-config
@@ -55,5 +71,11 @@ spec:
         - name: downloads
           persistentVolumeClaim:
             claimName: downloads
+        {{- if $app.scripts.enabled }}
+        - configMap:
+            defaultMode: 0755
+            name: sabnzbd-scripts
+          name: scripts
+        {{- end }}
 {{ include "media.ingresses" (dict "root" . "app" $app "service" "sabnzbd" "port" 8080) }}
 {{- end }}

@@ -1,6 +1,18 @@
 {{- $app := .Values.spotweb -}}
 {{- if $app.enabled }}
 {{- $db := $app.database }}
+{{- $bridge := $app.bridge }}
+{{- if $bridge.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spotweb-bridge
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "own" (dict "app" "spotweb") "app" $app) | nindent 2 }}
+data:
+  {{- toYaml (dict "spotweb-bridge.py" (.Files.Get "files/spotweb-bridge.py")) | nindent 2 }}
+{{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -13,6 +25,11 @@ spec:
     - name: http
       port: 80
       targetPort: 80
+    {{- if $bridge.enabled }}
+    - name: bridge
+      port: {{ $bridge.port }}
+      targetPort: {{ $bridge.port }}
+    {{- end }}
   selector:
     app: spotweb
   type: ClusterIP
@@ -77,10 +94,62 @@ spec:
           volumeMounts:
             - mountPath: /config
               name: config
+        {{- if $bridge.enabled }}
+        - command:
+            - python3
+            - /app/spotweb-bridge.py
+          env:
+            - name: PORT
+              value: {{ $bridge.port | quote }}
+            - name: SPOTWEB_URL
+              value: http://127.0.0.1:80
+            - name: SPOTWEB_HOST
+              value: spotweb.{{ .Release.Namespace }}.svc.cluster.local
+            {{- with $bridge.radarr.url }}
+            - name: RADARR_URL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $bridge.radarr.existingSecret }}
+            - name: RADARR_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: {{ $bridge.radarr.apiKeyKey }}
+                  name: {{ . }}
+            {{- end }}
+          image: {{ $bridge.image }}
+          name: bridge
+          ports:
+            - containerPort: {{ $bridge.port }}
+              name: bridge
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: bridge
+            periodSeconds: 10
+          resources:
+            {{- toYaml $bridge.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+          volumeMounts:
+            - mountPath: /app
+              name: bridge
+              readOnly: true
+        {{- end }}
       {{- include "media.placement" $app | nindent 6 }}
       volumes:
         # The entrypoint rewrites /config from the environment on every start.
         - emptyDir: {}
           name: config
+        {{- if $bridge.enabled }}
+        - configMap:
+            name: spotweb-bridge
+          name: bridge
+        {{- end }}
 {{ include "media.ingresses" (dict "root" . "app" $app "service" "spotweb" "port" 80) }}
 {{- end }}
