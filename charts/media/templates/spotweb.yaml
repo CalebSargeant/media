@@ -1,0 +1,86 @@
+{{- $app := .Values.spotweb -}}
+{{- if $app.enabled }}
+{{- $db := $app.database }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spotweb
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "own" (dict "app" "spotweb") "app" $app) | nindent 2 }}
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+  selector:
+    app: spotweb
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spotweb
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "own" (dict "app" "spotweb") "app" $app) | nindent 2 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spotweb
+  template:
+    metadata:
+      {{- include "media.podLabels" (dict "name" "spotweb" "app" $app) | nindent 6 }}
+    spec:
+      containers:
+        - env:
+            {{- include "media.tzEnv" (dict "root" . "app" $app) | nindent 12 }}
+            - name: SPOTWEB_DB_TYPE
+              value: {{ $db.type | quote }}
+            - name: SPOTWEB_DB_HOST
+              value: {{ required "spotweb.database.host is required" $db.host | quote }}
+            - name: SPOTWEB_DB_PORT
+              value: {{ $db.port | quote }}
+            - name: SPOTWEB_DB_NAME
+              value: {{ $db.name | quote }}
+            - name: SPOTWEB_DB_USER
+              value: {{ $db.user | quote }}
+            {{- with $db.existingSecret }}
+            - name: SPOTWEB_DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  key: {{ $db.passwordKey }}
+                  name: {{ . }}
+            {{- end }}
+            {{- with $app.cron.retrieve }}
+            - name: SPOTWEB_CRON_RETRIEVE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $app.cron.cacheCheck }}
+            - name: SPOTWEB_CRON_CACHE_CHECK
+              value: {{ . | quote }}
+            {{- end }}
+          image: {{ $app.image }}
+          {{- with $app.imagePullPolicy }}
+          imagePullPolicy: {{ . }}
+          {{- end }}
+          name: spotweb
+          ports:
+            - containerPort: 80
+              name: http
+          readinessProbe:
+            periodSeconds: 10
+            tcpSocket:
+              port: http
+          resources:
+            {{- toYaml $app.resources | nindent 12 }}
+          volumeMounts:
+            - mountPath: /config
+              name: config
+      {{- include "media.placement" $app | nindent 6 }}
+      volumes:
+        # The entrypoint rewrites /config from the environment on every start.
+        - emptyDir: {}
+          name: config
+{{ include "media.ingresses" (dict "root" . "app" $app "service" "spotweb" "port" 80) }}
+{{- end }}

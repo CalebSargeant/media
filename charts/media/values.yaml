@@ -336,6 +336,33 @@ sonarr:
     source: {}
   ingresses: []
 
+# Spotnet, the Dutch Usenet community index, served as a Newznab API for Sonarr
+# and Radarr. All state lives in the database, so there is no persistence block.
+# Usenet server and admin settings are made in Spotweb itself and kept there.
+spotweb:
+  enabled: false
+  image: jgeusebroek/spotweb:20261114
+  imagePullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 1Gi
+  database:
+    type: pdo_pgsql # or pdo_mysql
+    host: ""
+    port: 5432
+    name: spotweb
+    user: spotweb
+    existingSecret: ""
+    passwordKey: password
+  # Cron schedules run inside the container. Retrieval skips a run while one is in progress.
+  cron:
+    retrieve: "*/15 * * * *"
+    cacheCheck: ""
+  ingresses: []
+
 # Unmonitors and deletes titles that are on a subscribed streaming service, and
 # re-adds them once they leave it. Titles tagged with keepTag are never touched.
 # See files/sync.py.

@@ -1,8 +1,8 @@
 # media
 
 Helm chart for a self-hosted media stack: Plex, Overseerr, Sonarr, Radarr, Lidarr,
-Bazarr, Prowlarr, NZBHydra2, FlareSolverr, qBittorrent, SABnzbd, Recyclarr and a
-job that drops titles you can already stream.
+Bazarr, Prowlarr, NZBHydra2, Spotweb, FlareSolverr, qBittorrent, SABnzbd, Recyclarr
+and a job that drops titles you can already stream.
 
 ## Install
 
@@ -20,7 +20,8 @@ to your environment: hostnames, storage, node placement and secret names.
 
 ## Storage
 
-Each app keeps its config on a PVC named by `persistence.claimName`. Set
+Each app keeps its config on a PVC named by `persistence.claimName`, except Spotweb,
+which keeps everything in its database. Set
 `persistence.source` to a volume source (`hostPath`, `nfs`, ...) and the chart also
 creates a static PV for it. The `library` block does the same for the shared
 `movies`, `series`, `music` and `downloads` volumes.
@@ -35,6 +36,7 @@ The chart creates no Secrets. Point it at ones you manage:
 | App | Value | Keys |
 |---|---|---|
 | radarr, sonarr, prowlarr | `postgres.existingSecret` | `password` (or `postgres.passwordKey`) |
+| spotweb | `database.existingSecret` | `password` (or `database.passwordKey`) |
 | recyclarr | `existingSecret` | `SONARR_API_KEY`, `RADARR_API_KEY` |
 | streamingSync | `existingSecret` | `TMDB_API_KEY`, `RADARR_API_KEY`, `SONARR_API_KEY`, optional `SLACK_BOT_TOKEN` |
 
