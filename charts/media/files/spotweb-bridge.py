@@ -16,6 +16,7 @@ year or an extra sequel number rejects the result.
 
 Run with --self-test to check the matching rules.
 """
+import io
 import json
 import os
 import re
@@ -108,6 +109,7 @@ def item_categories(item):
 
 
 _wanted = {"at": 0.0, "movies": []}
+WANTED_PAGE = 200
 
 
 def wanted_movies():
@@ -115,22 +117,31 @@ def wanted_movies():
         return _wanted["movies"]
     if not RADARR_URL or not RADARR_API_KEY:
         return []
-    req = urllib.request.Request(f"{RADARR_URL}/api/v3/movie", headers={"X-Api-Key": RADARR_API_KEY})
+    out, page = [], 1
     try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            movies = json.load(r)
+        # Missing movies a page at a time: the whole library with its alternate titles
+        # parses to more than the sidecar's memory limit.
+        while True:
+            req = urllib.request.Request(
+                f"{RADARR_URL}/api/v3/wanted/missing?monitored=true&pageSize={WANTED_PAGE}&page={page}",
+                headers={"X-Api-Key": RADARR_API_KEY})
+            with urllib.request.urlopen(req, timeout=60) as r:
+                data = json.load(r)
+            records = data.get("records") or []
+            for m in records:
+                if not m.get("monitored") or m.get("hasFile") or not m.get("isAvailable"):
+                    continue
+                titles = {m.get("title") or ""} | {m.get("originalTitle") or ""}
+                titles |= {a.get("title") or "" for a in m.get("alternateTitles") or []}
+                titles = {t for t in titles if len([x for x in tokens(t) if x not in STOP]) >= 2}
+                if titles:
+                    out.append((m.get("title"), m.get("year") or 0, sorted(titles)))
+            if not records or page * WANTED_PAGE >= (data.get("totalRecords") or 0):
+                break
+            page += 1
     except (urllib.error.URLError, TimeoutError, ValueError) as e:
-        print(f"radarr movie list failed: {e}", file=sys.stderr)
+        print(f"radarr wanted list failed: {e}", file=sys.stderr)
         return _wanted["movies"]
-    out = []
-    for m in movies:
-        if not m.get("monitored") or m.get("hasFile") or not m.get("isAvailable"):
-            continue
-        titles = {m.get("title") or ""} | {m.get("originalTitle") or ""}
-        titles |= {a.get("title") or "" for a in m.get("alternateTitles") or []}
-        titles = {t for t in titles if len([x for x in tokens(t) if x not in STOP]) >= 2}
-        if titles:
-            out.append((m.get("title"), m.get("year") or 0, sorted(titles)))
     _wanted.update(at=time.time(), movies=out)
     return out
 
@@ -254,6 +265,21 @@ def self_test():
     assert "Dikkie Dik - Twee poezen 2008 DVDRip NL-Spotnet" in out and "Some Other Film" in out, out
     assert split_year("Dikkie Dik Twee poezen 2008") == ("Dikkie Dik Twee poezen", 2008)
     assert split_year("Lekker Weertje Dikkie Dik") == ("Lekker Weertje Dikkie Dik", 0)
+    pages = []
+
+    def fake_urlopen(req, timeout):
+        page = int(urllib.parse.parse_qs(urllib.parse.urlsplit(req.full_url).query)["page"][0])
+        pages.append(page)
+        rec = {"monitored": True, "isAvailable": True, "title": "Dikkie Dik - Twee poezen", "year": 2008}
+        return io.BytesIO(json.dumps({"totalRecords": WANTED_PAGE + 1,
+                                      "records": [rec] * (WANTED_PAGE if page == 1 else 1)}).encode())
+    globals().update(RADARR_URL="http://radarr", RADARR_API_KEY="x")
+    _wanted["at"] = 0
+    real, urllib.request.urlopen = urllib.request.urlopen, fake_urlopen
+    try:
+        assert len(wanted_movies()) == WANTED_PAGE + 1 and pages == [1, 2], pages
+    finally:
+        urllib.request.urlopen = real
     print("self-test passed")
 
 
