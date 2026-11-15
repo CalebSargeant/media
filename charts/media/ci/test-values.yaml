@@ -22,6 +22,18 @@ library:
         nfs:
           server: nas.example.com
           path: /export/downloads
+    audiobooks:
+      size: 500Gi
+      accessMode: ReadWriteOnce
+      source:
+        hostPath:
+          path: /srv/media/audiobooks
+    ebooks:
+      size: 50Gi
+      accessMode: ReadWriteOnce
+      source:
+        hostPath:
+          path: /srv/media/ebooks
 
 bazarr:
   enabled: true
@@ -35,6 +47,15 @@ bazarr:
         - hosts:
             - bazarr.example.com
           secretName: bazarr-tls
+
+bindery:
+  enabled: true
+  apiKeySecret:
+    name: bindery-api-key
+  ingresses:
+    - name: bindery
+      rules:
+        - host: bindery.example.com
 
 flaresolverr:
   enabled: true

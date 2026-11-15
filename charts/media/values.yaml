@@ -30,6 +30,8 @@ timezone: Etc/UTC
 
 # Volumes several apps mount: movies, series, music and downloads. The apps
 # expect these claims to exist, so enable this unless they come from elsewhere.
+# Bindery also mounts `audiobooks` and `ebooks`; add them here when it is on.
+# They have no defaults, so a chart upgrade never creates them without a source.
 library:
   enabled: false
   labels: {}
@@ -89,6 +91,31 @@ bazarr:
   persistence:
     claimName: bazarr
     size: 5Gi
+    accessMode: ReadWriteOnce
+    storageClass: ""
+    source: {}
+  ingresses: []
+
+# Follows authors and fetches their ebooks and audiobooks, like Radarr does for
+# films. Imports into the ebooks and audiobooks library volumes.
+bindery:
+  enabled: false
+  image: ghcr.io/vavallee/bindery:1.51.0
+  imagePullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 10m
+      memory: 96Mi
+    limits:
+      memory: 512Mi
+  # Secret with the API key Bindery takes on its first start. After that the key
+  # lives in Bindery's database, so changing the Secret has no effect.
+  apiKeySecret:
+    name: ""
+    key: api-key
+  persistence:
+    claimName: bindery-config
+    size: 2Gi
     accessMode: ReadWriteOnce
     storageClass: ""
     source: {}
