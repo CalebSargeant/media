@@ -36,6 +36,8 @@ spec:
       {{- include "media.podLabels" (dict "name" "bindery" "app" $app) | nindent 6 }}
     spec:
       automountServiceAccountToken: false
+      # The bindery Service would inject BINDERY_PORT=tcp://..., which Bindery reads as its listen port.
+      enableServiceLinks: false
       containers:
         - env:
             {{- include "media.tzEnv" (dict "root" . "app" $app) | nindent 12 }}
