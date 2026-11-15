@@ -1,0 +1,123 @@
+{{- $app := .Values.bindery -}}
+{{- if $app.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bindery
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+spec:
+  ports:
+    - port: 8787
+      protocol: TCP
+      targetPort: 8787
+  selector:
+    app: bindery
+  type: ClusterIP
+{{ include "media.claim" (dict "root" . "name" $app.persistence.claimName "vol" $app.persistence "owner" $app) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bindery
+  namespace: {{ .Release.Namespace }}
+  {{- include "media.labels" (dict "app" $app) | nindent 2 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bindery
+  # The config volume is ReadWriteOnce, so a rolling update's new pod could not attach it.
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      {{- include "media.podLabels" (dict "name" "bindery" "app" $app) | nindent 6 }}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - env:
+            {{- include "media.tzEnv" (dict "root" . "app" $app) | nindent 12 }}
+            - name: BINDERY_AUDIOBOOK_DIR
+              value: /audiobooks
+            - name: BINDERY_TELEMETRY_DISABLED
+              value: "true"
+            {{- with $app.apiKeySecret.name }}
+            - name: BINDERY_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: {{ $app.apiKeySecret.key }}
+                  name: {{ . }}
+            {{- end }}
+          image: {{ $app.image }}
+          {{- with $app.imagePullPolicy }}
+          imagePullPolicy: {{ . }}
+          {{- end }}
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /api/v1/health
+              port: 8787
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          name: bindery
+          ports:
+            - containerPort: 8787
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8787
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            {{- toYaml $app.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          startupProbe:
+            failureThreshold: 30
+            periodSeconds: 5
+            tcpSocket:
+              port: 8787
+          volumeMounts:
+            - mountPath: /config
+              name: bindery-config
+            - mountPath: /tmp
+              name: tmp
+            - mountPath: /books
+              name: ebooks
+            - mountPath: /audiobooks
+              name: audiobooks
+            - mountPath: /downloads
+              name: downloads
+      {{- include "media.placement" $app | nindent 6 }}
+      # The image has no PUID/PGID handling, so run it as that user directly: the
+      # library files then belong to the same user as everything else on the volumes.
+      securityContext:
+        fsGroup: {{ .Values.pgid }}
+        runAsGroup: {{ .Values.pgid }}
+        runAsNonRoot: true
+        runAsUser: {{ .Values.puid }}
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: bindery-config
+          persistentVolumeClaim:
+            claimName: {{ $app.persistence.claimName }}
+        - name: tmp
+          emptyDir: {}
+        - name: ebooks
+          persistentVolumeClaim:
+            claimName: ebooks
+        - name: audiobooks
+          persistentVolumeClaim:
+            claimName: audiobooks
+        - name: downloads
+          persistentVolumeClaim:
+            claimName: downloads
+{{ include "media.ingresses" (dict "root" . "app" $app "service" "bindery" "port" 8787) }}
+{{- end }}
